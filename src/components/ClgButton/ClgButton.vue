@@ -3,7 +3,8 @@
   import useColorUtilities from '../../composables/useColorUtilities';
   import type { ButtonProps } from './types';
 
-  const { color = 'bg-red-400' } = defineProps<ButtonProps>();
+  const { color = 'bg-red-400', rounded = 'rounded-xs' } =
+    defineProps<ButtonProps>();
   const isHover = ref(false);
 
   const { stylesOnHover, getHoverBackgroundColor } = useColorUtilities();
@@ -14,8 +15,8 @@
 
 <template>
   <button
-    class="rounded-md p-2 duration-300 text-white"
-    :class="[color]"
+    class="p-2 duration-300 text-white"
+    :class="[color, rounded]"
     :style="isHover ? stylesOnHover : {}"
     @mouseenter="isHover = true"
     @mouseleave="isHover = false"
