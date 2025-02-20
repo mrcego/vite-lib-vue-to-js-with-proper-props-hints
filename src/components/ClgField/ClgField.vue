@@ -1,7 +1,11 @@
 <script setup lang="ts">
   import type { FieldProps } from './types';
 
-  let { type = 'text', modelValue = '' } = defineProps<FieldProps>();
+  let {
+    type = 'text',
+    modelValue = '',
+    placeholder = ''
+  } = defineProps<FieldProps>();
 
   // const modelValue = defineModel({ default: '' });
 
@@ -13,6 +17,7 @@
 <template>
   <input
     :value="modelValue"
+    :placeholder="placeholder"
     @input="
       (event) =>
         emit('update:modelValue', (event.target as HTMLInputElement).value)

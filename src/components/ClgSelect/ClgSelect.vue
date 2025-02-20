@@ -15,7 +15,6 @@
 <template>
   <select
     class="outline-1 outline-blue-400 focus:outline-2 rounded-sm p-1 duration-75 w-1/2"
-    type="select"
     :placeholder="placeholder"
     :value="modelValue"
     @change="
