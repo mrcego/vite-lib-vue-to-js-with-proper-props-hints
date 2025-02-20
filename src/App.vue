@@ -1,19 +1,24 @@
 <script setup lang="ts">
+  import { ref } from 'vue';
+
   import ClgButton from './components/ClgButton';
   import ClgField from './components/ClgField';
   import ClgAvatar from './components/ClgAvatar';
   import ClgSelect from './components/ClgSelect';
 
-  import ClgvButton from './../public/js/ClgButton/ClgButton.js';
-  import ClgvField from './../public/js/ClgField/ClgField.js';
-  import ClgvAvatar from './../public/js/ClgAvatar/ClgAvatar.js';
-  import ClgvSelect from './../public/js/ClgSelect/ClgSelect.js';
-  import { ref } from 'vue';
+  import {
+    ClgButton as ClgvButton,
+    ClgField as ClgvField,
+    ClgAvatar as ClgvAvatar,
+    ClgSelect as ClgvSelect
+  } from './../public/js';
+
+  import type { SelectProps } from './../public/js/ClgSelect';
 
   const text = ref('');
   const item = ref();
   const button = ref('Component');
-  const items = ref([
+  const items = ref<SelectProps['items']>([
     { id: 1, label: 'Test 1', value: 1 },
     { id: 2, label: 'Test 2', value: 2 }
   ]);
@@ -26,10 +31,15 @@
     >
       <span class="font-bold text-green-700">Componentes .vue</span>
 
-      <ClgButton>Button</ClgButton>
-      <ClgField></ClgField>
-      <ClgAvatar></ClgAvatar>
-      <ClgSelect :items="items"></ClgSelect>
+      <ClgButton rounded="rounded-md" color="bg-blue-700"
+        >Botón de prueba</ClgButton
+      >
+      <ClgField
+        placeholder="Escribe algo aquí de Vue"
+        v-model="text"
+      ></ClgField>
+      <ClgAvatar initials="AC"></ClgAvatar>
+      <ClgSelect v-model="item" :items="items"></ClgSelect>
     </div>
 
     <div
@@ -37,10 +47,13 @@
     >
       <span class="font-bold text-yellow-500">Componentes .js</span>
 
-      <ClgvButton>Button</ClgvButton>
-      <ClgvField></ClgvField>
-      <ClgvAvatar></ClgvAvatar>
-      <ClgvSelect :items="items"></ClgvSelect>
+      <ClgvButton text="Yeah!" color="bg-green-700" />
+      <ClgvField
+        v-model="text"
+        placeholder="Escribe algo aquí de JS"
+      ></ClgvField>
+      <ClgvAvatar color="bg-green-700" initials="AR"></ClgvAvatar>
+      <ClgvSelect v-model="item" :items="items"></ClgvSelect>
     </div>
   </div>
 </template>

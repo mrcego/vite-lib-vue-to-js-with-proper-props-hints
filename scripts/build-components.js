@@ -4,10 +4,16 @@ import { relative, basename, dirname } from 'path';
 import { sync } from 'glob';
 import fsExtra from 'fs-extra';
 import path from 'path';
-import { unlinkSync } from 'fs';
+import {
+  unlinkSync,
+  existsSync,
+  readdirSync,
+  mkdirSync,
+  renameSync,
+  statSync
+} from 'fs';
 
 const {
-  existsSync,
   readFileSync,
   writeFileSync,
   readJsonSync,
@@ -23,9 +29,10 @@ const CONFIG = {
   COMPONENTS_PATH: './src/components',
   TEMP_BUILD_PATH: './temp-build',
   FINAL_OUTPUT_PATH: './public/js',
+  DIST_PATH: './dist/components',
   FILE_EXTENSIONS: {
     SOURCE: '.vue',
-    OUTPUT: ['.js', '.d.ts']
+    OUTPUT: ['.js']
   }
 };
 
@@ -88,11 +95,24 @@ const cleanDeletedFiles = (deletedEntries) => {
   });
 };
 
-const getChangedEntries = () => {
+const getChangedEntries = (forceRebuild = false) => {
   const entries = getEntries();
   let cache = existsSync(CONFIG.CACHE_FILE)
     ? readJsonSync(CONFIG.CACHE_FILE)
     : {};
+
+  if (forceRebuild) {
+    // If forcing rebuild, consider every entry like changed
+    console.log('🔄 Forcing every component rebuild...');
+
+    // Updating cache files with new hashes
+    entries.forEach(({ key, file }) => {
+      cache[key] = getFileHash(file);
+    });
+
+    writeJsonSync(CONFIG.CACHE_FILE, cache);
+    return entries;
+  }
 
   const changedEntries = entries.filter(({ key, file }) => {
     const currentHash = getFileHash(file);
@@ -114,7 +134,6 @@ import dts from 'vite-plugin-dts';
 import tailwindcss from '@tailwindcss/vite';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'url';
-import fs from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -122,54 +141,15 @@ const __dirname = dirname(__filename);
 export default defineConfig({
   plugins: [
     vue(),
+    tailwindcss(),
     dts({
       insertTypesEntry: true,
       include: ['src/components/**/*'],
-      // Configurar para que genere primero en dist
-      outDir: 'dist',
-    //   afterBuild: () => {
-    //     setTimeout(() => {
-    //       console.log('Post-compilation step running...');
-    //       // Después de la generación, mover los archivos
-    //       const moveFiles = (srcDir, destDir) => {
-    //         console.log('Moving files from', srcDir, 'to', destDir);
-
-    //         if (!fs.existsSync(srcDir)) {
-    //           console.error('Source directory does not exist, skipping move.');
-    //           return;
-    //         }
-
-    //         if (!fs.existsSync(destDir)) {
-    //           fs.mkdirSync(destDir, { recursive: true });
-    //         }
-
-    //         const files = fs.readdirSync(srcDir);
-
-    //         files.forEach((file) => {
-    //           const srcPath = resolve(srcDir, file);
-    //           const destPath = resolve(destDir, file);
-
-    //           if (fs.statSync(srcPath).isDirectory()) {
-    //             moveFiles(srcPath, destPath);
-    //             // Opcionalmente eliminar el directorio fuente después de mover
-    //             fs.rmdirSync(srcPath);
-    //           } else if (file.endsWith('.d.ts')) {
-    //             fs.renameSync(srcPath, destPath);
-    //           }
-    //         });
-    //       };
-
-    //       // Mover archivos de dist/components a public/js
-    //       moveFiles(
-    //         resolve(__dirname, 'dist/components'),
-    //         resolve(__dirname, 'js')
-    //       );
-    //     }, 500)
-    //   }
+      outDir: 'dist'
     })
   ],
   build: {
-    emptyOutDir: false,
+    emptyOutDir: true,
     lib: {
       entry: '${entry.file}',
       name: '${entry.name}',
@@ -193,6 +173,48 @@ export default defineConfig({
   }
 });
 `;
+
+const moveTypeDefinitions = async () => {
+  const distPath = CONFIG.DIST_PATH;
+  console.log('🔍 Checking ', distPath);
+
+  if (!existsSync(distPath)) {
+    console.log('⚠️ dist folder not found.');
+    return;
+  }
+
+  const items = readdirSync(distPath);
+  const folders = items.filter((item) =>
+    statSync(path.join(distPath, item)).isDirectory()
+  );
+
+  if (folders.length === 0) {
+    console.log('⚠️ There are not folders into dist.');
+    return;
+  }
+
+  folders.forEach((folder) => {
+    const srcDir = path.join(distPath, folder);
+    const destDir = path.join(CONFIG.FINAL_OUTPUT_PATH, folder);
+
+    console.log(`📂 Moving files: ${srcDir} → ${destDir}`);
+
+    if (!existsSync(destDir)) {
+      mkdirSync(destDir, { recursive: true });
+    }
+
+    const files = readdirSync(srcDir);
+
+    files.forEach((file) => {
+      const srcFile = path.join(srcDir, file);
+      const destFile = path.join(destDir, file);
+
+      renameSync(srcFile, destFile);
+    });
+
+    console.log(`✅ Files moved to ${destDir}`);
+  });
+};
 
 const copyBuildOutput = (entry) => {
   ensureDirSync(entry.outputDir);
@@ -225,17 +247,17 @@ const generateIndexes = () => {
     categories.get(category).push(name);
   });
 
-  // Ensure the output directory exists
   ensureDirSync(CONFIG.FINAL_OUTPUT_PATH);
 
-  // Generate category-specific index files
   categories.forEach((components, category) => {
     const categoryPath = path.join(CONFIG.FINAL_OUTPUT_PATH, category);
     ensureDirSync(categoryPath);
 
     const exports = components
-      .map((name) => `export { default as ${name} } from './${name}.js';`)
-      .join('\n');
+      .map(
+        (name) => `import ${name} from './${name}.js';\nexport default ${name};`
+      )
+      .join('\n\n');
 
     CONFIG.FILE_EXTENSIONS.OUTPUT.forEach((ext) => {
       const indexPath = path.join(categoryPath, `index${ext}`);
@@ -244,9 +266,15 @@ const generateIndexes = () => {
     });
   });
 
-  // Generate global index file
-  const globalExports = Array.from(categories.keys())
-    .map((category) => `export * from './${category}/index.js';`)
+  const globalExports = Array.from(categories.entries())
+    .map(([category, components]) =>
+      components
+        .map(
+          (name) =>
+            `export { default as ${name} } from './${category}/${name}.js';`
+        )
+        .join('\n')
+    )
     .join('\n');
 
   CONFIG.FILE_EXTENSIONS.OUTPUT.forEach((ext) => {
@@ -263,14 +291,13 @@ const cleanTempDirectory = () => {
   }
 };
 
-const buildFiles = async () => {
+const buildFiles = async (options = { force: false }) => {
   try {
-    // Clean temp directory at start
     cleanTempDirectory();
 
     const entries = getEntries();
     const deletedEntries = getDeletedEntries(entries);
-    const changedEntries = getChangedEntries();
+    const changedEntries = getChangedEntries(options.force);
 
     if (deletedEntries.length > 0) {
       cleanDeletedFiles(deletedEntries);
@@ -305,16 +332,18 @@ const buildFiles = async () => {
       }
     }
 
-    // Generate indexes after all components are built
-    // generateIndexes();
+    await moveTypeDefinitions();
+    generateIndexes();
   } finally {
-    // Clean up temp directory at end
     cleanTempDirectory();
   }
 };
 
-// Execute build process
-buildFiles().catch((error) => {
+// Detect --force argument
+const shouldForceRebuild = process.argv.includes('--force');
+
+// Execute build process with force option
+buildFiles({ force: shouldForceRebuild }).catch((error) => {
   console.error('Build process failed:', error);
   cleanTempDirectory();
   process.exit(1);

@@ -20,7 +20,7 @@
     "declarationDir": "./dist",
     "emitDeclarationOnly": true,
     "baseUrl": ".",
-    "types": ["vue", "volar"],
+    "types": ["vue"],
     "paths": {
       "@/*": ["src/*"]
     }
